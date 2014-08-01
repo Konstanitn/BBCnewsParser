@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" type="text/css" href="parserStile.css">
+
+<script type='text/javascript'>
+
+function loadData(url, method, oNews) {
+  // Передаваемые параметры 
+  //url - ссылка
+  // method - метод передачи нанных на сервер
+  // oNews - объект новости, требуется только для сохранения записи в базе данных
+  var xmlhttp;
+
+  if (window.XMLHttpRequest){
+    xmlhttp=new XMLHttpRequest();
+  } else {
+    xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+  }
+
+  xmlhttp.onreadystatechange=function() {
+    if (xmlhttp.readyState==4 && xmlhttp.status==200) {
+      // В зависимости от файла серверного сценария вызываем разные функции-обработчики
+      if (url.substring(0, 3) == 'get') {
+        curNewsFeed(xmlhttp.responseXML);
+      } else if (url.substring(0, 3) == 'sql') {
+        archNewsFeed(xmlhttp.responseText);
+      }
+    }
+  }
+
+  var sFullUrl = encodeURI(url);
+  xmlhttp.open(method, sFullUrl, true);
+  if (method == "GET") {
+    xmlhttp.send();
+  } else {
+    // Запрос POST высылыется только при сохранении новой записи в базу данных
+    xmlhttp.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+    xmlhttp.send("action=add&title="+oNews.title + '&link=' + oNews.link + '&date='+ oNews.date + '&content=' + oNews.content);
+  }
+  
+
+}
+//-------------------------------------------------------- Класс News ------------------------------------------------------
+
+function News(oNode, nPositionInArray) {
+  // Основной класс новости - принимаемый аргументы
+  // oNode - узел XML документа entry
+  // nPositionInArray - позиция новости в массиве текущих новостей, нужна для передачи функции
+  // добавления новости в архив
+  var oThis = this;
+
+  try {
+    // Если передан только один аргумент то значит передан узел XML - разбираем его
+    if (!arguments[2]) {
+      // Заполняем свойства объекта 
+      oThis.date = oNode.getElementsByTagName("published")[0].childNodes[0].nodeValue;
+      oThis.link = oNode.getElementsByTagName("link")[0].getAttributeNode("href").value;
+      oThis.title =  oNode.getElementsByTagName("title")[0].childNodes[0].nodeValue;
+      oThis.content = oNode.getElementsByTagName("summary")[0].childNodes[0].nodeValue;
+    } else {
+      // Передно много аргументов - значит новость из архива - разбираем ее
+      oThis.news_id = arguments[0]; // требуется для функции удаления новости из базы данных
+      oThis.title = arguments[1];
+      oThis.link = arguments[2];
+      oThis.date = arguments[3];
+      // MySQL коверкает дату при сохранении убирая "+" перед смещение часового пояса, поэтому дату 
+      // следует восстановить - это важно для обработчика getFormatedDate иначе он выдает ошибку.
+      if (oThis.date.indexOf("+") == -1) {
+        oThis.date = oThis.date.slice(0, -6) + "+" + oThis.date.slice(-5);
+      }
+      oThis.content = arguments[4];
+    } 
+
+
+  } catch(err) { 
+      // Если обнаружились ошибки при заполнении свойств объекта
+      // незаполненные поля заполняются стандартными значениями.
+      if (!oThis.title) { oThis.title = "Заголовок " };
+      if (!oThis.link) { oThis.link = "#" };
+      if (!oThis.date) { oThis.date = "0" };
+      if (!oThis.content) { oThis.content = " " };
+  } 
+  
+  this.getTestContent = function() {
+    // Метод тестирования контента экземпляра класса
+    function createEl(sElName, oParrentEl) {
+    // вспомогательная функция создающая елмент HTML
+      var curElement = document.createElement(sElName);
+      oParrentEl.appendChild(curElement);
+    }
+
+    var oDiv = document.createElement("div"); 
+    oDiv.innerHTML = "Новость: ";
+    createEl("br", oDiv);
+    oDiv.innerHTML += "Дата публикации: " + oThis.date;
+    createEl("br", oDiv);
+    oDiv.innerHTML += "Заголовок: " + oThis.title;
+    createEl("br", oDiv);
+    oDiv.innerHTML += "Текст: " + oThis.content;
+    createEl("br", oDiv);
+    oDiv.innerHTML += "Ссылка: " + oThis.link;
+    createEl("br", oDiv);
+    createEl("hr", oDiv);
+
+    return oDiv; // возвращается готовый блок с данными
+  }
+
+  this.getNews = function(bCurOrArch) {
+    // bCurOrArch - если true то выводиться блок последних новостей
+    // Метод возвращает блок div с новостью
+    var oDiv = document.createElement("div"); 
+    oDiv.className = "NewsElem";
+    //Добавляем заголовок-ссылку
+    curElem=document.createElement("a");
+    curElem.href = this.link;
+    curElem.target = "_new";
+    curElem.innerHTML = this.title;
+    curElem.className = "title";
+    oDiv.appendChild(curElem);
+    //Добавлем содержание новости
+    curElem=document.createElement("p");
+    curElem.innerHTML = this.content;
+    curElem.className = "content";
+    oDiv.appendChild(curElem);
+    //Добавлем дату
+    curElem=document.createElement("p");
+    curElem.innerHTML = this.getFormatedDate();
+    curElem.className = "date";
+    oDiv.appendChild(curElem);
+    //Добавляем ссылку еще раз
+    curElem=document.createElement("a");
+    curElem.href = this.link;
+    curElem.target = "_new";
+    curElem.innerHTML = "Читать дальше...";
+    curElem.className = "link";
+    oDiv.appendChild(curElem);
+    if (bCurOrArch) {
+      //Добавляем кнопку "архивировать"
+      curElem=document.createElement("a");
+      curElem.setAttribute('onclick', 'addNewsToArch(' + nPositionInArray +')');
+      curElem.innerHTML = "Архивировать";
+      curElem.className = "link";
+      curElem.style.marginLeft = "10px"
+      curElem.style.cursor = "pointer"
+      oDiv.appendChild(curElem);
+    } else if (!bCurOrArch) {
+      //Добавляем кнопку "Удалить из архива"
+      curElem=document.createElement("a");
+      curElem.setAttribute('onclick', 'deleteNews(' + this.news_id +')');
+      curElem.innerHTML = "Удалить из архива";
+      curElem.className = "link";
+      curElem.style.marginLeft = "10px"
+      curElem.style.cursor = "pointer"
+      oDiv.appendChild(curElem);
+    }
+
+    return oDiv
+  }
+
+  this.getFormatedDate = function() {
+    //Метод преобразования даты из ISO 8601 Extended в удобоваримый вид
+
+    var dformatedDate = new Date(Date.parse(this.date));
+    var aMonth = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+    // Формируем результирующую строку
+    var sResString = dformatedDate.getDate() + " " + aMonth[dformatedDate.getMonth()] + " " + dformatedDate.getFullYear() + " года.";
+
+    return sResString;
+  }   
+}
+
+//----------------------------------------------------------- Конец класса News ---------------------------------------------------------
+
+function curNewsFeed(oXml) {
+  // Функция создания масива последних новостей
+  if (oXml) {
+    var oRoot = oXml.documentElement;
+
+    // Находим все узлы с новостями
+    var aNewsElem = oRoot.getElementsByTagName("entry");
+    // Заполяняем массив объектов News
+    for(var i=0; i<aNewsElem.length; i++) {
+      aCurNewsList[i] = new News(aNewsElem[i], i); 
+    }
+    showCurNews();
+  }
+}
+
+function archNewsFeed(sText) {
+  //Функция создания массива новостей из архива
+  //Параметры передаються через сепрараторы 
+  // || - между аргументами новости
+  // ## - между самими новотсями
+  var aNewsElem = sText.split('##');
+  aArchNewsList = [];
+
+  for (var i=0; i<aNewsElem.length-1; i++) {
+    // Разбираем аргументы
+    var aArgElem = aNewsElem[i].split('||');
+    // Добавляем новую новость
+    aArchNewsList[i] = new News(aArgElem[0],aArgElem[1], aArgElem[2], aArgElem[3], aArgElem[4]);
+  }
+  showArchNews(); // Показываем новости пользователю
+}
+
+function showCurNews() {
+  // Функция заполнения страницы последними новостями
+  if (aCurNewsList[0]) {
+    var oDivNews = document.getElementById("News");
+    document.getElementById("currentNews").style.display = "block"
+    oDivNews.innerHTML = "";
+    // Удалили начинку блока, - теперь вставляем новую
+    for (i=0; i<aCurNewsList.length; i++) {
+      var oAppendTo = aCurNewsList[i].getNews(true);
+      oDivNews.appendChild(oAppendTo);
+    }
+  }
+}
+
+function showArchNews() {
+  if (aArchNewsList[0]) {
+    var oDivNews = document.getElementById("archNews");
+    oDivNews.innerHTML = "";
+    for (i=0; i<aArchNewsList.length; i++) {
+      var oAppendTo = aArchNewsList[i].getNews(false);
+      oDivNews.appendChild(oAppendTo);
+    }
+    // Анимация появления
+    var oDivArch = document.getElementById("archForAnimate");
+    var oDivCurNews =  document.getElementById("currentNews");
+    // Если блок Архива новостей скрыт
+    if (oDivArch.style.display == "") {
+      oDivArch.style.width = "0px"; 
+      oDivCurNews.style.marginRight = "5px";
+      oDivArch.style.display = "block";
+      // Каждые 10 мс увеличиваем ширину блока Архива новостей и отступ справа Последних новостей
+      var timer = setInterval(function() {
+        if (+oDivArch.style.width.substring(0,3) > 500)  { 
+          clearInterval(timer);
+          oDivArch.style.width = "500px";
+          oDivCurNews.style.marginRight = "505px"
+
+        }
+          var nWidth = +oDivArch.style.width.substring(0, oDivArch.style.width.indexOf("px")) + 25;
+          oDivArch.style.width = nWidth + "px";
+          var nMarginRight = nWidth + 30;
+          oDivCurNews.style.marginRight = nMarginRight + "px";
+      }, 30);
+    }
+  } else hideArchNews(); // Если новостей в архиве нет то скрываем блок Архивных новостей
+}
+
+// Функция скрывания Архива новостей 
+function hideArchNews() {
+  var oDivArch = document.getElementById("archForAnimate");
+  var oDivCurNews =  document.getElementById("currentNews");
+
+  oDivArch.style.display = "";
+  oDivArch.style.width = "0px";
+  oDivCurNews.style.marginRight = "0px";
+}
+
+// Функция удаления новости из архива
+function deleteNews(news_id) {
+  sFullUrl = "sql_parser.php?action=delete&news_id="+news_id;
+  loadData(sFullUrl, "GET");
+  showArchNews()
+}
+
+// Функция добавления новсти в архив
+function addNewsToArch(nPositionInArr) {
+  loadData("sql_parser.php", "POST", aCurNewsList[nPositionInArr]);
+  showArchNews()
+}
+
+</script>
+</head>
+<body>
+<script>  
+// Массив последних новостей
+var aCurNewsList = new Array;
+// Массив архива новостей
+var aArchNewsList = new Array;
+</script>
+<header> 
+  <img src="logo.png">
+  <!-- Загрузка с сервера BBC последних новостей -->
+  <a onclick="loadData('get_file.php?url=http://wsrss.bbc.co.uk/russian/index.xml', 'GET')">Последние новости</a>
+  <a onclick="loadData('sql_parser.php', 'GET')">Архив новостей</a>
+  <a onclick="hideArchNews()">Скрыть архив новостей</a>
+</header>
+<div id="allNews">
+  <div id="archForAnimate">
+    <div id="archive">
+      <span> Архив новостей </span>
+      <div id="archNews"> </div>
+    </div>
+  </div>
+  <div id="currentNews">
+    <span> Последние новости </span>
+    <div id="News"> </div>
+  </div>  
+</div>
+</body>
+</html>
