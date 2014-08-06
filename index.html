@@ -9,7 +9,7 @@
 function loadData(url, method, oNews) {
   // Передаваемые параметры 
   //url - ссылка
-  // method - метод передачи нанных на сервер
+  // method - метод передачи данных на сервер
   // oNews - объект новости, требуется только для сохранения записи в базе данных
   var xmlhttp;
 
@@ -35,7 +35,7 @@ function loadData(url, method, oNews) {
   if (method == "GET") {
     xmlhttp.send();
   } else {
-    // Запрос POST высылыется только при сохранении новой записи в базу данных
+    // Запрос POST высылается только при сохранении новой записи в базу данных
     xmlhttp.setRequestHeader("Content-type","application/x-www-form-urlencoded");
     xmlhttp.send("action=add&title="+oNews.title + '&link=' + oNews.link + '&date='+ oNews.date + '&content=' + oNews.content);
   }
@@ -45,7 +45,7 @@ function loadData(url, method, oNews) {
 //-------------------------------------------------------- Класс News ------------------------------------------------------
 
 function News(oNode, nPositionInArray) {
-  // Основной класс новости - принимаемый аргументы
+  // Основной класс новости - принимаемые аргументы
   // oNode - узел XML документа entry
   // nPositionInArray - позиция новости в массиве текущих новостей, нужна для передачи функции
   // добавления новости в архив
@@ -86,7 +86,7 @@ function News(oNode, nPositionInArray) {
   this.getTestContent = function() {
     // Метод тестирования контента экземпляра класса
     function createEl(sElName, oParrentEl) {
-    // вспомогательная функция создающая елмент HTML
+    // вспомогательная функция создающая елемент HTML
       var curElement = document.createElement(sElName);
       oParrentEl.appendChild(curElement);
     }
@@ -108,7 +108,7 @@ function News(oNode, nPositionInArray) {
   }
 
   this.getNews = function(bCurOrArch) {
-    // bCurOrArch - если true то выводиться блок последних новостей
+    // bCurOrArch - если true то выводится блок последних новостей
     // Метод возвращает блок div с новостью
     var oDiv = document.createElement("div"); 
     oDiv.className = "NewsElem";
@@ -190,7 +190,7 @@ function curNewsFeed(oXml) {
 
 function archNewsFeed(sText) {
   //Функция создания массива новостей из архива
-  //Параметры передаються через сепрараторы 
+  //Параметры передаються через сепараторы 
   // || - между аргументами новости
   // ## - между самими новотсями
   var aNewsElem = sText.split('##');
@@ -269,7 +269,7 @@ function deleteNews(news_id) {
   showArchNews()
 }
 
-// Функция добавления новсти в архив
+// Функция добавления новости в архив
 function addNewsToArch(nPositionInArr) {
   loadData("sql_parser.php", "POST", aCurNewsList[nPositionInArr]);
   showArchNews()
